@@ -4,9 +4,11 @@ import android.net.Uri
 import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
+import android.widget.TextView
 
 import java.io.PrintWriter
 import java.net.ServerSocket
+import java.net.Socket
 
 class MainActivity : AppCompatActivity() {
 
@@ -15,9 +17,14 @@ class MainActivity : AppCompatActivity() {
         const val TAG = "MainActivity"
     }
 
+    private var mClient: Socket? = null
+    private var mServer: ServerSocket? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        val statusTextView = findViewById<TextView>(R.id.status)
 
         val server = object : Thread() {
             override fun run() {
@@ -60,24 +67,37 @@ class MainActivity : AppCompatActivity() {
 
                 cursor.close()
 
-                Log.d(TAG, "Listening on port 1337")
+                mServer = ServerSocket(1337)
 
-                val server = ServerSocket(1337)
-                val client = server.accept()
+                Log.d(TAG, "Listening on port 1337")
+                statusTextView.post { statusTextView.text = "Listening on port 1337" }
+
+                mClient = mServer?.accept()
 
                 // val receive = BufferedReader(InputStreamReader(client.getInputStream()))
-                val send = PrintWriter(client.getOutputStream(), true)
+                val send = PrintWriter(mClient?.getOutputStream(), true)
 
                 // Log.d(TAG, receive.readLine())
-                send.println(messages.json())
-                Log.d(TAG, "Transmission is done")
+                Log.d(TAG, "Sending information")
+                statusTextView.post { statusTextView.text = "Sending information" }
 
-                client.close()
-                server.close()
+                send.println(messages.json())
+
+                Log.d(TAG, "Transmission is done")
+                statusTextView.post { statusTextView.text = "Transmission is done" }
             }
         }
 
         server.start()
+
+        statusTextView.text = "Loading messages..."
+    }
+
+    override fun onDestroy() {
+        mClient?.close()
+        mServer?.close()
+
+        super.onDestroy()
     }
 }
 
