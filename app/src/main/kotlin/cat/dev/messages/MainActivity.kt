@@ -5,6 +5,9 @@ import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 
+import java.io.PrintWriter
+import java.net.ServerSocket
+
 class MainActivity : AppCompatActivity() {
 
     companion object {
@@ -16,46 +19,65 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val messages = hashMapOf<Int, MessageThread>()
-        val sortOrder = "date ASC"
+        val server = object : Thread() {
+            override fun run() {
+                val messages = hashMapOf<Int, MessageThread>()
+                val sortOrder = "date ASC"
 
-        var uri = Uri.parse("content://sms/conversations")
-        var projection = arrayOf("thread_id")
-        var cursor = contentResolver.query(uri, projection, null, null, null, null)
+                var uri = Uri.parse("content://sms/conversations")
+                var projection = arrayOf("thread_id")
+                var cursor = contentResolver.query(uri, projection, null, null, null, null)
 
-        while (cursor.moveToNext()) {
-            messages.put(cursor.getInt(0), MessageThread())
+                while (cursor.moveToNext()) {
+                    messages.put(cursor.getInt(0), MessageThread())
+                }
+
+                uri = Uri.parse("content://sms")
+                projection = arrayOf("thread_id", "address", "body", "date", "type")
+                cursor = contentResolver.query(uri, projection, null, null, sortOrder, null)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getInt(0)
+                    val body = parseBody(cursor.getString(2))
+                    val date = cursor.getLong(3)
+                    val type = cursor.getInt(4)
+
+                    val address = if (type == MESSAGE_INBOX) {
+                        "\"${cursor.getString(1)}\""
+                    } else {
+                        "null"
+                    }
+
+                    val message = "{\"address\": $address, \"body\": \"$body\", \"date\": $date}"
+
+                    messages[id]?.date = date
+                    messages[id]?.messages?.add(message)
+
+                    if (type == MESSAGE_INBOX) {
+                        messages[id]?.recipients?.add(address)
+                    }
+                }
+
+                cursor.close()
+
+                Log.d(TAG, "Listening on port 1337")
+
+                val server = ServerSocket(1337)
+                val client = server.accept()
+
+                // val receive = BufferedReader(InputStreamReader(client.getInputStream()))
+                val send = PrintWriter(client.getOutputStream(), true)
+
+                // Log.d(TAG, receive.readLine())
+                send.println(messages.json())
+                Log.d(TAG, "Transmission is done")
+
+                client.close()
+                server.close()
+            }
         }
 
-        uri = Uri.parse("content://sms")
-        projection = arrayOf("thread_id", "address", "body", "date", "type")
-        cursor = contentResolver.query(uri, projection, null, null, sortOrder, null)
-
-        while (cursor.moveToNext()) {
-            val id = cursor.getInt(0)
-            val body = parseBody(cursor.getString(2))
-            val date = cursor.getLong(3)
-            val type = cursor.getInt(4)
-
-            val address = if (type == MESSAGE_INBOX) {
-                "\"${cursor.getString(1)}\""
-            } else {
-                "null"
-            }
-
-            val message = "{\"address\": $address, \"body\": \"$body\", \"date\": $date}"
-
-            messages[id]?.date = date
-            messages[id]?.messages?.add(message)
-
-            if (type == MESSAGE_INBOX) {
-                messages[id]?.recipients?.add(address)
-            }
-        }
-
-        Log.d(TAG, messages.json())
-
-        cursor.close()
+        server.start()
     }
 }
 
@@ -82,6 +104,7 @@ private fun parseBody(body: String): String {
     for (character in body) {
         when (character) {
             '"' -> stringBuilder.append("\\\"")
+            '\\' -> stringBuilder.append("\\\\")
             '\n' -> stringBuilder.append("\\n")
             else -> stringBuilder.append(character)
         }
