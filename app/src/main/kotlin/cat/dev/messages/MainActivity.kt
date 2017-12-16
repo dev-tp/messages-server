@@ -1,11 +1,15 @@
 package cat.dev.messages
 
 import android.net.Uri
-import android.support.v7.app.AppCompatActivity
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Message
+import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.widget.TextView
 
+import java.io.IOException
 import java.io.PrintWriter
 import java.net.ServerSocket
 import java.net.Socket
@@ -15,6 +19,18 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val MESSAGE_INBOX = 1
         const val TAG = "MainActivity"
+    }
+
+    private val mHandler = object : Handler(Looper.getMainLooper()) {
+        override fun handleMessage(message: Message?) {
+            if (message?.what == 0) {
+                message.obj.let { ipAddress ->
+                    if (ipAddress is String) {
+                        findViewById<TextView>(R.id.ip_address).text = ipAddress
+                    }
+                }
+            }
+        }
     }
 
     private var mClient: Socket? = null
@@ -68,27 +84,41 @@ class MainActivity : AppCompatActivity() {
                 cursor.close()
 
                 mServer = ServerSocket(1337)
-
-                Log.d(TAG, "Listening on port 1337")
                 statusTextView.post { statusTextView.text = "Listening on port 1337" }
-
                 mClient = mServer?.accept()
 
                 // val receive = BufferedReader(InputStreamReader(client.getInputStream()))
                 val send = PrintWriter(mClient?.getOutputStream(), true)
 
                 // Log.d(TAG, receive.readLine())
-                Log.d(TAG, "Sending information")
                 statusTextView.post { statusTextView.text = "Sending information" }
-
                 send.println(messages.json())
-
-                Log.d(TAG, "Transmission is done")
                 statusTextView.post { statusTextView.text = "Transmission is done" }
             }
         }
 
+        val updateIp = object : Thread() {
+            override fun run() {
+                val message = Message()
+                var connection: Socket? = null
+
+                message.obj = "127.0.0.1"
+                message.what = 0
+
+                try {
+                    connection = Socket("google.com", 80)
+                    message.obj = connection.localAddress.hostAddress
+                } catch (exception: IOException) {
+                    Log.e(TAG, exception.message)
+                } finally {
+                    mHandler.handleMessage(message)
+                    connection?.close()
+                }
+            }
+        }
+
         server.start()
+        updateIp.start()
 
         statusTextView.text = "Loading messages..."
     }
