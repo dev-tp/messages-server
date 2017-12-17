@@ -23,12 +23,10 @@ class MainActivity : AppCompatActivity() {
 
     private val mHandler = object : Handler(Looper.getMainLooper()) {
         override fun handleMessage(message: Message?) {
-            if (message?.what == 0) {
-                message.obj.let { ipAddress ->
-                    if (ipAddress is String) {
-                        findViewById<TextView>(R.id.ip_address).text = ipAddress
-                    }
-                }
+            when (message?.what) {
+                0 -> findViewById<TextView>(R.id.ip_address).text = message.obj as String
+                1 -> findViewById<TextView>(R.id.status).text = message.obj as String
+                else -> Log.d(TAG, "Something went wrong...")
             }
         }
     }
@@ -40,10 +38,19 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val statusTextView = findViewById<TextView>(R.id.status)
-
         val server = object : Thread() {
+            private fun obtainOsMessage(text: String): Message {
+                val message = mHandler.obtainMessage()
+
+                message.obj = text
+                message.what = 1
+
+                return message
+            }
+
             override fun run() {
+                mHandler.sendMessage(obtainOsMessage("Loading messages..."))
+
                 val messages = hashMapOf<Int, MessageThread>()
                 val sortOrder = "date ASC"
 
@@ -84,16 +91,18 @@ class MainActivity : AppCompatActivity() {
                 cursor.close()
 
                 mServer = ServerSocket(1337)
-                statusTextView.post { statusTextView.text = "Listening on port 1337" }
+
+                mHandler.sendMessage(obtainOsMessage("Listening on port 1337"))
+
                 mClient = mServer?.accept()
 
                 // val receive = BufferedReader(InputStreamReader(client.getInputStream()))
                 val send = PrintWriter(mClient?.getOutputStream(), true)
 
                 // Log.d(TAG, receive.readLine())
-                statusTextView.post { statusTextView.text = "Sending information" }
+                mHandler.sendMessage(obtainOsMessage("Sending information"))
                 send.println(messages.json())
-                statusTextView.post { statusTextView.text = "Transmission is done" }
+                mHandler.sendMessage(obtainOsMessage("Transmission is done"))
             }
         }
 
@@ -111,7 +120,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (exception: IOException) {
                     Log.e(TAG, exception.message)
                 } finally {
-                    mHandler.handleMessage(message)
+                    mHandler.sendMessage(message)
                     connection?.close()
                 }
             }
@@ -119,8 +128,6 @@ class MainActivity : AppCompatActivity() {
 
         server.start()
         updateIp.start()
-
-        statusTextView.text = "Loading messages..."
     }
 
     override fun onDestroy() {
