@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
                 var cursor = contentResolver.query(uri, projection, null, null, null, null)
 
                 while (cursor.moveToNext()) {
-                    messages.put(cursor.getInt(0), MessageThread())
+                    messages[cursor.getInt(0)] = MessageThread()
                 }
 
                 uri = Uri.parse("content://sms")
@@ -80,12 +80,12 @@ class MainActivity : AppCompatActivity() {
 
                     val message = "{\"address\": $address, \"body\": \"$body\", \"date\": $date}"
 
+                    if (messages[id]?.address == null && type == MESSAGE_INBOX) {
+                        messages[id]?.address = address
+                    }
+
                     messages[id]?.date = date
                     messages[id]?.messages?.add(message)
-
-                    if (type == MESSAGE_INBOX) {
-                        messages[id]?.recipients?.add(address)
-                    }
                 }
 
                 cursor.close()

@@ -2,8 +2,8 @@ package cat.dev.messages
 
 class MessageThread {
     val messages: ArrayList<String> = arrayListOf()
-    val recipients: HashSet<String> = hashSetOf()
+    var address: String? = null
     var date = 0L
 
-    override fun toString(): String = "{\"date\": $date, \"messages\": $messages, \"recipients\": $recipients}"
+    override fun toString(): String = "{\"address\": $address, \"date\": $date, \"messages\": $messages}"
 }
